@@ -106,7 +106,7 @@ electricity-maps-etl/
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/<your-username>/electricity-maps-etl.git
+git clone https://github.com/abidhussey-gh/electricity-maps-etl.git
 cd electricity-maps-etl
 ```
 
