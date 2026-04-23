@@ -46,14 +46,25 @@ def _read_bronze(spark: SparkSession, bronze_path: str) -> DataFrame:
     )
 
 
-def _flatten_flow_map(df: DataFrame, map_col: str, flow_type: str) -> DataFrame:
-    """Explode a single flow-type map column into (counterpart_zone, power_mw) rows."""
+def _flatten_flow_map(base: DataFrame, map_col: str, flow_type: str) -> DataFrame:
+    """
+    Explode a single flow map column into (counterpart_zone, power_mw) rows.
+    Uses to_json → from_json to convert struct to MAP since Spark infers
+    flat dicts as structs.
+    """
+    from pyspark.sql.types import MapType
+
     return (
-        df.select(
+        base.select(
             "zone",
             "ingestion_timestamp_str",
             "datetime_str",
-            F.explode(F.col(map_col)).alias("counterpart_zone", "power_mw"),
+            F.explode(
+                F.from_json(
+                    F.to_json(F.col(map_col)),
+                    MapType(StringType(), DoubleType())
+                )
+            ).alias("counterpart_zone", "power_mw"),
         )
         .withColumn("flow_type", F.lit(flow_type))
     )
@@ -68,23 +79,21 @@ def _flatten(df: DataFrame) -> DataFrame:
         "zone",
         "ingestion_timestamp_str",
         F.col("rec.datetime").alias("datetime_str"),
-        F.col("rec.powerImport").alias("powerImport"),
-        F.col("rec.powerExport").alias("powerExport"),
-        F.col("rec.powerNetImport").alias("powerNetImport"),
+        F.col("rec.import").alias("import"),
+        F.col("rec.export").alias("export"),
     )
 
-    imports_df = _flatten_flow_map(base, "powerImport", "import")
-    exports_df = _flatten_flow_map(base, "powerExport", "export")
-    net_df     = _flatten_flow_map(base, "powerNetImport", "net_import")
+    imports_df = _flatten_flow_map(base, "import", "import")
+    exports_df = _flatten_flow_map(base, "export", "export")
 
-    return imports_df.unionByName(exports_df).unionByName(net_df)
+    return imports_df.unionByName(exports_df)
 
 
 def _apply_schema(df: DataFrame) -> DataFrame:
     df = (
         df.withColumn(
             "data_timestamp",
-            F.to_timestamp(F.col("datetime_str"), "yyyy-MM-dd'T'HH:mm:ssX"),
+            F.to_timestamp(F.col("datetime_str"), "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"),
         )
         .withColumn("ingestion_timestamp", F.to_timestamp(F.col("ingestion_timestamp_str")))
         .withColumn("power_mw", F.col("power_mw").cast(DoubleType()))

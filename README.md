@@ -123,7 +123,7 @@ source .venv/bin/activate        # Linux / macOS
 ### 3. Install dependencies
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt 
 ```
 
 > **Note:** `delta-spark` downloads Spark JARs on first run — this may take a minute.
@@ -233,10 +233,7 @@ The API client uses `tenacity` for exponential-backoff retry logic, covering HTT
 | `data_timestamp` | TIMESTAMP | Hourly measurement time (UTC) |
 | `source_type` | STRING | Energy source (e.g. `nuclear`, `wind`) |
 | `power_mw` | DOUBLE | Consumption for this source (MW) |
-| `fossil_free_percentage` | DOUBLE | Zone-level fossil-free % |
-| `renewable_percentage` | DOUBLE | Zone-level renewable % |
-| `power_consumption_total_mw` | DOUBLE | Total zone consumption (MW) |
-| `power_production_total_mw` | DOUBLE | Total zone production (MW) |
+| `is_estimated` | STRING | Whether the value is estimated by the sandbox (SANDBOX_MODE_DATA)
 | `ingestion_timestamp` | TIMESTAMP | When the Bronze record was written |
 | `year` / `month` / `day` | STRING | Partition columns |
 
@@ -248,7 +245,7 @@ The API client uses `tenacity` for exponential-backoff retry logic, covering HTT
 | `zone` | STRING | Home zone (`FR`) |
 | `data_timestamp` | TIMESTAMP | Hourly measurement time (UTC) |
 | `counterpart_zone` | STRING | Trading partner (e.g. `DE`, `GB`) |
-| `flow_type` | STRING | `import` \| `export` \| `net_import` |
+| `flow_type` | STRING | `import` \| `export` |
 | `power_mw` | DOUBLE | Flow magnitude (MW) |
 | `ingestion_timestamp` | TIMESTAMP | When the Bronze record was written |
 | `year` / `month` / `day` | STRING | Partition columns |
@@ -263,8 +260,6 @@ The API client uses `tenacity` for exponential-backoff retry logic, covering HTT
 | `daily_power_mwh` | DOUBLE | Sum of hourly MW (proxy for MWh) |
 | `total_daily_consumption_mwh` | DOUBLE | Zone total for the day |
 | `pct_contribution` | DOUBLE | Source share of total (0–100) |
-| `avg_fossil_free_pct` | DOUBLE | Daily average fossil-free % |
-| `avg_renewable_pct` | DOUBLE | Daily average renewable % |
 | `reference_timestamp` | TIMESTAMP | Midnight UTC of the date |
 | `pipeline_run_timestamp` | TIMESTAMP | Pipeline execution time |
 | `year` / `month` | STRING | Partition columns |
@@ -298,7 +293,6 @@ DQ checks run automatically after each Silver and Gold transformation. Failures 
 | `no_nulls_on_key_cols` | Silver, Gold | ✅ |
 | `no_duplicate_ids` | Silver, Gold | ✅ |
 | `power_non_negative` | Silver mix | ❌ (warning) |
-| `pct_range` | Silver mix | ❌ (warning) |
 | `pct_contribution_sum` | Gold mix | ❌ (warning) |
 
 ---

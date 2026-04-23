@@ -37,7 +37,6 @@ def run_checks(df: DataFrame, layer: str, stream: str) -> list[CheckResult]:
 
     if layer == "silver" and stream == "electricity_mix":
         results.append(_check_power_non_negative(df))
-        results.append(_check_pct_range(df))
 
     if layer == "gold" and stream == "daily_electricity_mix":
         results.append(_check_pct_contribution_sum(df))
@@ -110,23 +109,6 @@ def _check_power_non_negative(df: DataFrame) -> CheckResult:
         passed=neg_count == 0,
         detail=f"{neg_count} rows with negative power_mw",
     )
-
-
-def _check_pct_range(df: DataFrame) -> CheckResult:
-    for col in ("fossil_free_percentage", "renewable_percentage"):
-        if col not in df.columns:
-            continue
-        out_of_range = df.filter(
-            (F.col(col) < 0) | (F.col(col) > 100)
-        ).count()
-        if out_of_range > 0:
-            return CheckResult(
-                "pct_range",
-                False,
-                f"{out_of_range} rows where {col} is outside [0, 100]",
-            )
-    return CheckResult("pct_range", True, "All percentage columns in [0, 100].")
-
 
 def _check_pct_contribution_sum(df: DataFrame) -> CheckResult:
     """

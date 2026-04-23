@@ -107,26 +107,6 @@ class TestDataQualityChecks:
         result = _check_power_non_negative(df)
         assert not result.passed
 
-    def test_pct_range_passes(self, spark):
-        from src.utils.data_quality import _check_pct_range
-        from datetime import datetime
-
-        df = self._make_mix_df(spark, [
-            ("id1", "FR", datetime(2024, 1, 15, 10), "nuclear", 45000.0, 92.0, 25.0, 65000.0, 63000.0),
-        ])
-        result = _check_pct_range(df)
-        assert result.passed
-
-    def test_pct_range_fails_on_over_100(self, spark):
-        from src.utils.data_quality import _check_pct_range
-        from datetime import datetime
-
-        df = self._make_mix_df(spark, [
-            ("id1", "FR", datetime(2024, 1, 15, 10), "nuclear", 45000.0, 150.0, 25.0, 65000.0, 63000.0),
-        ])
-        result = _check_pct_range(df)
-        assert not result.passed
-
     def test_run_checks_raises_on_critical_failure(self, spark):
         from src.utils.data_quality import run_checks
 

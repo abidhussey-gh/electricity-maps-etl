@@ -41,38 +41,30 @@ PRODUCT_EXPORTS = "electricity_exports"
 
 
 def build(spark: SparkSession | None = None) -> tuple[DataFrame, DataFrame]:
-    """
-    Build both import and export Gold tables.
-    Returns (imports_df, exports_df).
-    """
     spark  = spark or get_spark()
     silver = spark.read.format("delta").load(Config.silver_path("electricity_flows"))
     run_ts = datetime.now(tz=timezone.utc)
 
-    # Use net_import flow_type for the cleanest signal
-    net_flows = (
-        silver.filter(F.col("flow_type") == "net_import")
-        .withColumn("date", F.to_date("data_timestamp"))
-    )
+    # Silver flows now only has flow_type = "import" | "export"
+    # No net_import — compute net MWh by aggregating daily totals directly
 
-    # Daily aggregation per (zone, counterpart_zone)
-    daily_net = (
-        net_flows.groupBy("zone", "counterpart_zone", "date")
+    daily = (
+        silver
+        .withColumn("date", F.to_date("data_timestamp"))
+        .groupBy("zone", "counterpart_zone", "date", "flow_type")
         .agg(F.sum("power_mw").alias("net_mwh"))
     )
 
-    # Positive net_mwh → France imported from counterpart
     imports_df = (
-        daily_net.filter(F.col("net_mwh") > 0)
+        daily.filter(F.col("flow_type") == "import")
         .withColumn("flow_direction", F.lit("import"))
         .withColumn("net_mwh", F.col("net_mwh").cast(DoubleType()))
     )
 
-    # Negative net_mwh → France exported to counterpart (flip sign)
     exports_df = (
-        daily_net.filter(F.col("net_mwh") < 0)
+        daily.filter(F.col("flow_type") == "export")
         .withColumn("flow_direction", F.lit("export"))
-        .withColumn("net_mwh", F.abs(F.col("net_mwh")).cast(DoubleType()))
+        .withColumn("net_mwh", F.col("net_mwh").cast(DoubleType()))
     )
 
     for label, df in [("imports", imports_df), ("exports", exports_df)]:
@@ -101,8 +93,7 @@ def build(spark: SparkSession | None = None) -> tuple[DataFrame, DataFrame]:
         )
 
         product = PRODUCT_IMPORTS if label == "imports" else PRODUCT_EXPORTS
-        gold_path = Config.gold_path(product)
-        _write_gold(spark, df, gold_path, label)
+        _write_gold(spark, df, Config.gold_path(product), label)
 
         if label == "imports":
             imports_df = df

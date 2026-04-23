@@ -38,9 +38,6 @@ PRODUCT = "daily_electricity_mix"
 
 
 def build(spark: SparkSession | None = None) -> DataFrame:
-    """
-    Read Silver electricity-mix table and produce the daily mix Gold product.
-    """
     spark = spark or get_spark()
     silver_path = Config.silver_path("electricity_mix")
     gold_path   = Config.gold_path(PRODUCT)
@@ -55,8 +52,6 @@ def build(spark: SparkSession | None = None) -> DataFrame:
         .groupBy("zone", "date", "source_type")
         .agg(
             F.sum("power_mw").alias("daily_power_mwh"),
-            F.avg("fossil_free_percentage").alias("avg_fossil_free_pct"),
-            F.avg("renewable_percentage").alias("avg_renewable_pct"),
         )
     )
 
@@ -88,8 +83,6 @@ def build(spark: SparkSession | None = None) -> DataFrame:
             "daily_power_mwh",
             "total_daily_consumption_mwh",
             "pct_contribution",
-            "avg_fossil_free_pct",
-            "avg_renewable_pct",
             "reference_timestamp",
             "pipeline_run_timestamp",
             "year",
@@ -97,7 +90,6 @@ def build(spark: SparkSession | None = None) -> DataFrame:
         )
     )
 
-    # ── Write Delta + Parquet ─────────────────────────────────────────────────
     _write_gold(spark, gold, gold_path)
     return gold
 

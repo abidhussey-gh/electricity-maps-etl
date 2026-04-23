@@ -7,10 +7,6 @@ from config import Config
 import os
 import sys
 
-# # Windows: ensure HADOOP_HOME is set before Spark initialises
-# if sys.platform == "win32":
-#     os.environ.setdefault("HADOOP_HOME", r"C:\Users\Lenovo\Downloads\hadoop\bin")
-
 def get_spark(app_name: str | None = None) -> SparkSession:
     """
     Return (or create) a SparkSession with Delta Lake extensions enabled.
@@ -37,10 +33,6 @@ def get_spark(app_name: str | None = None) -> SparkSession:
         # Adaptive query execution (auto-tunes shuffle partitions)
         .config("spark.sql.adaptive.enabled", "true")
         .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
-        # Bypass Windows native IO — avoids hadoop.dll NativeIO errors
-       # Disable native Windows IO at JVM level to avoid hadoop.dll mismatch
-        .config("spark.driver.extraJavaOptions", "-Dorg.apache.hadoop.io.nativeio.NativeIO.Windows.access0=false")
-        .config("spark.hadoop.io.nativeio.enabled", "false")
     )
 
     return builder.getOrCreate()

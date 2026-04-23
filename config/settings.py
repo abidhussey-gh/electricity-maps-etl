@@ -12,14 +12,14 @@ class Config:
     # ── API ──────────────────────────────────────────────────────────────────
     API_KEY: str = os.getenv("ELECTRICITY_MAPS_API_KEY", "")
     BASE_URL: str = os.getenv(
-        "ELECTRICITY_MAPS_BASE_URL", "https://api.electricitymap.org/v3"
+        "ELECTRICITY_MAPS_BASE_URL", "https://api.electricitymaps.com"
     )
     ZONE: str = "FR"
 
     # Sandbox endpoints (free-tier)
     ENDPOINTS = {
-        "power_breakdown": "/power-breakdown/history",   # electricity mix
-        "power_imports_exports": "/power-breakdown/history",  # flows derived from same endpoint
+        "electricity_mix":   "/v4/electricity-mix/history",
+        "electricity_flows": "/v4/electricity-flows/history",
     }
 
     # ── Storage ───────────────────────────────────────────────────────────────
