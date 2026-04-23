@@ -157,7 +157,7 @@ class TestBronzeMixIngestion:
             data = json.load(fh)
 
         assert data["_meta"]["record_count"] == 1
-        assert data["history"][0]["datetime"] == "2024-01-15T11:00:00Z"
+        assert data["history"][0]["datetime"] == "2024-01-15T11:00:00.000Z"
 
     def test_no_new_data_returns_empty_list(self, mock_client, tmp_data_root):
         from src.bronze.ingest_electricity_mix import ingest

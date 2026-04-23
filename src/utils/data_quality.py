@@ -15,6 +15,7 @@ from typing import Any
 
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
+from pyspark.sql.types import DoubleType
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +104,7 @@ def _check_no_duplicate_ids(df: DataFrame, layer: str, stream: str) -> CheckResu
 def _check_power_non_negative(df: DataFrame) -> CheckResult:
     if "power_mw" not in df.columns:
         return CheckResult("power_non_negative", True, "No power_mw column — skipped.")
-    neg_count = df.filter(F.col("power_mw") < 0).count()
+    neg_count = df.filter(F.col("power_mw").cast(DoubleType()) < 0).count()
     return CheckResult(
         check_name="power_non_negative",
         passed=neg_count == 0,

@@ -97,11 +97,16 @@ class TestDataQualityChecks:
 
     def test_power_non_negative_fails_on_negative(self, spark):
         from src.utils.data_quality import _check_power_non_negative
+        from pyspark.sql.types import DoubleType
         from datetime import datetime
 
         df = self._make_mix_df(spark, [
-            ("id1", "FR", datetime(2024,1,15,10), "nuclear", 45000.0, "SANDBOX_MODE_DATA", datetime(2024,1,15,12)),
+            ("id1", "FR", datetime(2024,1,15,10), "nuclear", -100.0, "SANDBOX_MODE_DATA", datetime(2024,1,15,12)),
         ])
+        # Verify the value actually came through as negative before testing the check
+        actual_val = df.select("power_mw").first()["power_mw"]
+        assert actual_val == -100.0, f"Expected -100.0 but got {actual_val} — schema mismatch"
+
         result = _check_power_non_negative(df)
         assert not result.passed
 
