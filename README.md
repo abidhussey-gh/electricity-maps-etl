@@ -84,8 +84,6 @@ electricity-maps-etl/
 │   ├── test_silver.py
 │   ├── test_api_client.py
 │   └── test_data_quality.py
-├── sample_outputs/
-│   └── bronze/                      # Example partitioned JSON files
 ├── .github/
 │   └── workflows/
 │       └── ci.yml                   # GitHub Actions CI/CD
