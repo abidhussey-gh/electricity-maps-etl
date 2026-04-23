@@ -34,25 +34,35 @@ class TestElectricityMapsClient:
         mock_response.raise_for_status = MagicMock()
 
         with patch.object(client.session, "get", return_value=mock_response):
-            with patch("time.sleep"):  # skip rate-limit pause
-                result = client.get_power_breakdown_history(zone="FR")
+            with patch("time.sleep"):
+                result = client.get_electricity_mix(zone="FR")  # ← updated
+
+        assert result == {"history": []}
+
+    def test_get_electricity_flows_successful(self, client):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"history": []}
+        mock_response.raise_for_status = MagicMock()
+
+        with patch.object(client.session, "get", return_value=mock_response):
+            with patch("time.sleep"):
+                result = client.get_electricity_flows(zone="FR")  # ← new test
 
         assert result == {"history": []}
 
     def test_retries_on_rate_limit(self, client):
-        """Client should retry on HTTP 429 and eventually succeed."""
         mock_429 = MagicMock()
         mock_429.status_code = 429
 
         mock_200 = MagicMock()
         mock_200.status_code = 200
-        mock_200.json.return_value = {"history": [{"datetime": "2024-01-15T10:00:00Z"}]}
+        mock_200.json.return_value = {"history": [{"datetime": "2024-01-15T10:00:00.000Z"}]}
         mock_200.raise_for_status = MagicMock()
 
         with patch.object(client.session, "get", side_effect=[mock_429, mock_429, mock_200]):
             with patch("time.sleep"):
-                from src.utils.api_client import RateLimitError
-                result = client.get_power_breakdown_history(zone="FR")
+                result = client.get_electricity_mix(zone="FR")  # ← updated
 
         assert "history" in result
 
@@ -64,21 +74,45 @@ class TestElectricityMapsClient:
         with patch.object(client.session, "get", return_value=mock_response):
             with patch("time.sleep"):
                 with pytest.raises(requests.HTTPError):
-                    client.get_power_breakdown_history(zone="FR")
+                    client.get_electricity_mix(zone="FR")  # ← updated
 
-    def test_datetime_param_formatted_correctly(self, client):
-        from datetime import datetime, timezone
-
+    def test_correct_endpoint_used_for_mix(self, client):
+        """get_electricity_mix must call the /v4/electricity-mix/history endpoint."""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"history": []}
         mock_response.raise_for_status = MagicMock()
 
-        dt = datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
+        with patch.object(client.session, "get", return_value=mock_response) as mock_get:
+            with patch("time.sleep"):
+                client.get_electricity_mix(zone="FR")
+
+        url_called = mock_get.call_args[0][0]
+        assert "/v4/electricity-mix/history" in url_called
+
+    def test_correct_endpoint_used_for_flows(self, client):
+        """get_electricity_flows must call the /v4/electricity-flows/history endpoint."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"history": []}
+        mock_response.raise_for_status = MagicMock()
 
         with patch.object(client.session, "get", return_value=mock_response) as mock_get:
             with patch("time.sleep"):
-                client.get_power_breakdown_history(zone="FR", datetime_=dt)
+                client.get_electricity_flows(zone="FR")
+
+        url_called = mock_get.call_args[0][0]
+        assert "/v4/electricity-flows/history" in url_called
+
+    def test_zone_param_passed_correctly(self, client):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"history": []}
+        mock_response.raise_for_status = MagicMock()
+
+        with patch.object(client.session, "get", return_value=mock_response) as mock_get:
+            with patch("time.sleep"):
+                client.get_electricity_mix(zone="DE")
 
         _, kwargs = mock_get.call_args
-        assert kwargs["params"]["datetime"] == "2024-01-15T10:00:00Z"
+        assert kwargs["params"]["zone"] == "DE"

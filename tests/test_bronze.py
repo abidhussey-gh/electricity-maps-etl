@@ -16,53 +16,63 @@ import pytest
 # ---------------------------------------------------------------------------
 
 MOCK_API_RESPONSE = {
+    "zone": "FR",
+    "temporalGranularity": "hourly",
+    "unit": "MW",
     "history": [
         {
-            "datetime": "2024-01-15T10:00:00Z",
-            "zone": "FR",
-            "fossilFreePercentage": 92.5,
-            "renewablePercentage": 25.3,
-            "powerConsumptionTotal": 65000.0,
-            "powerProductionTotal": 63000.0,
-            "powerConsumptionBreakdown": {
+            "datetime": "2024-01-15T10:00:00.000Z",
+            "updatedAt": "2024-01-15T11:00:00.000Z",
+            "isEstimated": True,
+            "estimationMethod": "SANDBOX_MODE_DATA",
+            "mix": {
                 "nuclear": 45000.0,
                 "hydro": 8000.0,
                 "wind": 3000.0,
                 "solar": 1200.0,
                 "gas": 4500.0,
                 "coal": 300.0,
+                "oil": 43.6,
+                "biomass": 1166.0,
+                "geothermal": None,
+                "unknown": None,
+                "hydro storage": {"charge": 713.0, "discharge": None},
+                "battery storage": {"charge": 11.0, "discharge": None},
             },
-            "powerImport": {"ES": 1200.0, "DE": 800.0},
-            "powerExport": {"GB": 500.0, "IT": 300.0},
-            "powerNetImport": {"ES": 900.0, "DE": 600.0, "GB": -500.0, "IT": -300.0},
+            "import": {"ES": 1200.0, "DE": 800.0},
+            "export": {"GB": 500.0, "IT": 300.0},
         },
         {
-            "datetime": "2024-01-15T11:00:00Z",
-            "zone": "FR",
-            "fossilFreePercentage": 91.0,
-            "renewablePercentage": 24.8,
-            "powerConsumptionTotal": 66000.0,
-            "powerProductionTotal": 64000.0,
-            "powerConsumptionBreakdown": {
+            "datetime": "2024-01-15T11:00:00.000Z",
+            "updatedAt": "2024-01-15T12:00:00.000Z",
+            "isEstimated": True,
+            "estimationMethod": "SANDBOX_MODE_DATA",
+            "mix": {
                 "nuclear": 46000.0,
                 "hydro": 7500.0,
                 "wind": 2800.0,
                 "solar": 1000.0,
                 "gas": 5000.0,
                 "coal": 200.0,
+                "oil": 38.0,
+                "biomass": 976.0,
+                "geothermal": None,
+                "unknown": None,
+                "hydro storage": {"charge": 2074.0, "discharge": None},
+                "battery storage": {"charge": 55.0, "discharge": None},
             },
-            "powerImport": {"ES": 1100.0, "DE": 900.0},
-            "powerExport": {"GB": 400.0, "IT": 350.0},
-            "powerNetImport": {"ES": 800.0, "DE": 700.0, "GB": -400.0, "IT": -350.0},
+            "import": {"ES": 1100.0, "DE": 900.0},
+            "export": {"GB": 400.0, "IT": 350.0},
         },
-    ]
+    ],
 }
 
 
 @pytest.fixture()
 def mock_client():
     client = MagicMock()
-    client.get_power_breakdown_history.return_value = MOCK_API_RESPONSE
+    client.get_electricity_mix.return_value = MOCK_API_RESPONSE      # ← was get_power_breakdown_history
+    client.get_electricity_flows.return_value = MOCK_API_RESPONSE    # ← was get_power_breakdown_history
     return client
 
 
@@ -185,8 +195,9 @@ class TestBronzeFlowsIngestion:
             data = json.load(fh)
 
         first_record = data["history"][0]
-        assert "powerImport" in first_record
-        assert "powerExport" in first_record
-        assert "powerNetImport" in first_record
-        # Mix-only columns should NOT be present
-        assert "powerConsumptionBreakdown" not in first_record
+        assert "import" in first_record        # ← was powerImport
+        assert "export" in first_record        # ← was powerExport
+        # Mix-only columns must not be present
+        assert "mix" not in first_record
+        assert "powerImport" not in first_record
+        assert "powerExport" not in first_record

@@ -31,20 +31,18 @@ class TestDataQualityChecks:
 
     def _make_mix_df(self, spark, rows):
         from pyspark.sql.types import (
-            DoubleType, StringType, StructField, StructType, TimestampType
+            BooleanType, DoubleType, StringType,
+            StructField, StructType, TimestampType
         )
-        from datetime import datetime
 
         schema = StructType([
-            StructField("record_id", StringType()),
-            StructField("zone", StringType()),
-            StructField("data_timestamp", TimestampType()),
-            StructField("source_type", StringType()),
-            StructField("power_mw", DoubleType()),
-            StructField("fossil_free_percentage", DoubleType()),
-            StructField("renewable_percentage", DoubleType()),
-            StructField("power_consumption_total_mw", DoubleType()),
-            StructField("power_production_total_mw", DoubleType()),
+            StructField("record_id",           StringType()),
+            StructField("zone",                StringType()),
+            StructField("data_timestamp",      TimestampType()),
+            StructField("source_type",         StringType()),
+            StructField("power_mw",            DoubleType()),
+            StructField("is_estimated",        StringType()),   # ← replaces fossil_free/renewable
+            StructField("ingestion_timestamp", TimestampType()),
         ])
         return spark.createDataFrame(rows, schema)
 
@@ -53,7 +51,7 @@ class TestDataQualityChecks:
         from datetime import datetime
 
         df = self._make_mix_df(spark, [
-            ("id1", "FR", datetime(2024, 1, 15, 10), "nuclear", 45000.0, 92.0, 25.0, 65000.0, 63000.0)
+            ("id1", "FR", datetime(2024,1,15,10), "nuclear", 45000.0, "SANDBOX_MODE_DATA", datetime(2024,1,15,12)),
         ])
         result = _check_not_empty(df, "silver", "electricity_mix")
         assert result.passed
@@ -70,8 +68,8 @@ class TestDataQualityChecks:
         from datetime import datetime
 
         df = self._make_mix_df(spark, [
-            ("id1", "FR", datetime(2024, 1, 15, 10), "nuclear", 45000.0, 92.0, 25.0, 65000.0, 63000.0),
-            ("id2", "FR", datetime(2024, 1, 15, 10), "wind",    3000.0,  92.0, 25.0, 65000.0, 63000.0),
+            ("id1", "FR", datetime(2024,1,15,10), "nuclear", 45000.0, "SANDBOX_MODE_DATA", datetime(2024,1,15,12)),
+            ("id2", "FR", datetime(2024,1,15,10), "wind", 45000.0, "SANDBOX_MODE_DATA", datetime(2024,1,15,12)),
         ])
         result = _check_no_duplicate_ids(df, "silver", "electricity_mix")
         assert result.passed
@@ -81,8 +79,8 @@ class TestDataQualityChecks:
         from datetime import datetime
 
         df = self._make_mix_df(spark, [
-            ("id1", "FR", datetime(2024, 1, 15, 10), "nuclear", 45000.0, 92.0, 25.0, 65000.0, 63000.0),
-            ("id1", "FR", datetime(2024, 1, 15, 10), "nuclear", 45000.0, 92.0, 25.0, 65000.0, 63000.0),
+            ("id1", "FR", datetime(2024,1,15,10), "nuclear", 45000.0, "SANDBOX_MODE_DATA", datetime(2024,1,15,12)),
+            ("id1", "FR", datetime(2024,1,15,10), "nuclear", 45000.0, "SANDBOX_MODE_DATA", datetime(2024,1,15,12)),
         ])
         result = _check_no_duplicate_ids(df, "silver", "electricity_mix")
         assert not result.passed
@@ -92,7 +90,7 @@ class TestDataQualityChecks:
         from datetime import datetime
 
         df = self._make_mix_df(spark, [
-            ("id1", "FR", datetime(2024, 1, 15, 10), "nuclear", 45000.0, 92.0, 25.0, 65000.0, 63000.0),
+            ("id1", "FR", datetime(2024,1,15,10), "nuclear", 45000.0, "SANDBOX_MODE_DATA", datetime(2024,1,15,12)),
         ])
         result = _check_power_non_negative(df)
         assert result.passed
@@ -102,7 +100,7 @@ class TestDataQualityChecks:
         from datetime import datetime
 
         df = self._make_mix_df(spark, [
-            ("id1", "FR", datetime(2024, 1, 15, 10), "nuclear", -100.0, 92.0, 25.0, 65000.0, 63000.0),
+            ("id1", "FR", datetime(2024,1,15,10), "nuclear", 45000.0, "SANDBOX_MODE_DATA", datetime(2024,1,15,12)),
         ])
         result = _check_power_non_negative(df)
         assert not result.passed

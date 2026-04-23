@@ -42,35 +42,48 @@ def spark():
 SAMPLE_BRONZE_MIX = {
     "_meta": {
         "ingestion_timestamp": "2024-01-15T12:00:00+00:00",
-        "source_url": "https://api.electricitymap.org/v3/power-breakdown/history?zone=FR",
+        "source_url": "https://api.electricitymaps.com/v4/electricity-mix/history?zone=FR",
         "zone": "FR",
         "record_count": 2,
     },
     "history": [
         {
-            "datetime": "2024-01-15T10:00:00Z",
-            "zone": "FR",
-            "fossilFreePercentage": 92.5,
-            "renewablePercentage": 25.3,
-            "powerConsumptionTotal": 65000.0,
-            "powerProductionTotal": 63000.0,
-            "powerConsumptionBreakdown": {
+            "datetime": "2024-01-15T10:00:00.000Z",
+            "isEstimated": True,
+            "estimationMethod": "SANDBOX_MODE_DATA",
+            "mix": {
                 "nuclear": 45000.0,
                 "hydro": 8000.0,
                 "wind": 3000.0,
+                "solar": None,
+                "gas": 4500.0,
+                "coal": 300.0,
+                "oil": 43.6,
+                "biomass": 1166.0,
+                "geothermal": None,
+                "unknown": None,
+                "hydro storage": {"charge": 713.0, "discharge": None},
+                "battery storage": {"charge": 11.0, "discharge": None},
             },
         },
         {
-            "datetime": "2024-01-15T10:00:00Z",   # duplicate — same datetime
-            "zone": "FR",
-            "fossilFreePercentage": 92.5,
-            "renewablePercentage": 25.3,
-            "powerConsumptionTotal": 65000.0,
-            "powerProductionTotal": 63000.0,
-            "powerConsumptionBreakdown": {
+            # Duplicate datetime — for dedup test
+            "datetime": "2024-01-15T10:00:00.000Z",
+            "isEstimated": True,
+            "estimationMethod": "SANDBOX_MODE_DATA",
+            "mix": {
                 "nuclear": 45000.0,
                 "hydro": 8000.0,
                 "wind": 3000.0,
+                "solar": None,
+                "gas": 4500.0,
+                "coal": 300.0,
+                "oil": 43.6,
+                "biomass": 1166.0,
+                "geothermal": None,
+                "unknown": None,
+                "hydro storage": {"charge": 713.0, "discharge": None},
+                "battery storage": {"charge": 11.0, "discharge": None},
             },
         },
     ],
@@ -79,17 +92,15 @@ SAMPLE_BRONZE_MIX = {
 SAMPLE_BRONZE_FLOWS = {
     "_meta": {
         "ingestion_timestamp": "2024-01-15T12:00:00+00:00",
-        "source_url": "https://api.electricitymap.org/v3/power-breakdown/history?zone=FR",
+        "source_url": "https://api.electricitymaps.com/v4/electricity-flows/history?zone=FR",
         "zone": "FR",
         "record_count": 1,
     },
     "history": [
         {
-            "datetime": "2024-01-15T10:00:00Z",
-            "zone": "FR",
-            "powerImport": {"ES": 1200.0, "DE": 800.0},
-            "powerExport": {"GB": 500.0},
-            "powerNetImport": {"ES": 900.0, "DE": 600.0, "GB": -500.0},
+            "datetime": "2024-01-15T10:00:00.000Z",
+            "import": {"ES": 1200.0, "DE": 800.0},   # ← was powerImport
+            "export": {"GB": 500.0},                  # ← was powerExport
         }
     ],
 }
@@ -118,13 +129,14 @@ def make_flows_df(spark, data=None):
 class TestSilverMixTransform:
 
     def test_flatten_produces_one_row_per_source(self, spark):
-        from src.silver.transform_electricity_mix import _flatten
+        from src.silver.transform_electricity_mix import _flatten, SIMPLE_SOURCES, STORAGE_SOURCES
 
         raw = make_mix_df(spark)
         flat = _flatten(raw)
 
-        # 2 history records × 3 sources = 6 rows before dedup
-        assert flat.count() == 6
+        # 2 history records × (11 simple + 4 storage directions) = 30 rows before dedup
+        expected = len(SIMPLE_SOURCES) + (len(STORAGE_SOURCES) * 2)
+        assert flat.count() == expected * 2  # 2 history records
 
     def test_schema_has_required_columns(self, spark):
         from src.silver.transform_electricity_mix import _flatten, _apply_schema
@@ -135,9 +147,13 @@ class TestSilverMixTransform:
         cols = set(typed.columns)
         for expected in (
             "record_id", "zone", "data_timestamp", "source_type",
-            "power_mw", "fossil_free_percentage", "year", "month", "day",
+            "power_mw", "is_estimated", "year", "month", "day",
         ):
             assert expected in cols, f"Missing column: {expected}"
+
+        # These columns no longer exist in v4 schema
+        assert "fossil_free_percentage" not in cols
+        assert "renewable_percentage" not in cols
 
     def test_data_timestamp_is_timestamp_type(self, spark):
         from pyspark.sql.types import TimestampType
@@ -150,15 +166,16 @@ class TestSilverMixTransform:
         assert isinstance(ts_field.dataType, TimestampType)
 
     def test_dedup_removes_duplicate_records(self, spark):
-        from src.silver.transform_electricity_mix import _flatten, _apply_schema, _deduplicate
+        from src.silver.transform_electricity_mix import (
+            _flatten, _apply_schema, _deduplicate, SIMPLE_SOURCES, STORAGE_SOURCES
+        )
 
         raw = make_mix_df(spark)
-        flat = _flatten(raw)
-        typed = _apply_schema(flat)
-        deduped = _deduplicate(typed)
+        deduped = _deduplicate(_apply_schema(_flatten(raw)))
 
-        # Both history rows are identical → should collapse to 3 unique rows
-        assert deduped.count() == 3
+        # Both history rows are identical → should collapse to unique sources only
+        expected = len(SIMPLE_SOURCES) + (len(STORAGE_SOURCES) * 2)
+        assert deduped.count() == expected
 
     def test_record_id_is_deterministic(self, spark):
         from src.silver.transform_electricity_mix import _flatten, _apply_schema
@@ -166,14 +183,22 @@ class TestSilverMixTransform:
         raw = make_mix_df(spark)
         typed = _apply_schema(_flatten(raw))
 
-        sample = typed.filter(
-            (typed.source_type == "nuclear") &
-            (typed.zone == "FR")
-        ).select("record_id").first()
-
+        sample = typed.filter(typed.source_type == "nuclear").select("record_id").first()
         assert sample is not None
         assert "FR" in sample["record_id"]
         assert "nuclear" in sample["record_id"]
+
+    def test_storage_sources_produce_charge_discharge_rows(self, spark):
+        from src.silver.transform_electricity_mix import _flatten
+
+        raw = make_mix_df(spark)
+        flat = _flatten(raw)
+
+        source_types = {r["source_type"] for r in flat.select("source_type").collect()}
+        assert "hydro storage_charge" in source_types
+        assert "hydro storage_discharge" in source_types
+        assert "battery storage_charge" in source_types
+        assert "battery storage_discharge" in source_types
 
     def test_partition_columns_correct(self, spark):
         from src.silver.transform_electricity_mix import _flatten, _apply_schema
@@ -199,17 +224,18 @@ class TestSilverFlowsTransform:
         raw = make_flows_df(spark)
         flat = _flatten(raw)
 
-        # 3 counterparts × 3 flow_types = 9 rows
-        assert flat.count() == 9
+        # 1 import record (ES, DE = 2 rows) + 1 export record (GB = 1 row) = 3 rows
+        assert flat.count() == 3
 
-    def test_all_flow_types_present(self, spark):
+    def test_only_import_and_export_flow_types_present(self, spark):
         from src.silver.transform_electricity_flows import _flatten
 
         raw = make_flows_df(spark)
         flat = _flatten(raw)
 
         flow_types = {r["flow_type"] for r in flat.select("flow_type").collect()}
-        assert flow_types == {"import", "export", "net_import"}
+        assert flow_types == {"import", "export"}
+        assert "net_import" not in flow_types   # ← removed in v4
 
     def test_schema_typed_correctly(self, spark):
         from pyspark.sql.types import DoubleType, TimestampType
