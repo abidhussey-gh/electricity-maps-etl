@@ -1,0 +1,24 @@
+{
+  "_meta": {
+    "ingestion_timestamp": "2024-01-15T12:00:00+00:00",
+    "source_url": "https://api.electricitymap.org/v3/power-breakdown/history?zone=FR",
+    "zone": "FR",
+    "record_count": 2
+  },
+  "history": [
+    {
+      "datetime": "2024-01-15T10:00:00Z",
+      "zone": "FR",
+      "powerImport": { "ES": 1200.0, "DE": 800.0, "BE": 500.0 },
+      "powerExport": { "GB": 500.0, "IT": 300.0, "CH": 200.0 },
+      "powerNetImport": { "ES": 900.0, "DE": 600.0, "BE": 400.0, "GB": -500.0, "IT": -300.0, "CH": -200.0 }
+    },
+    {
+      "datetime": "2024-01-15T11:00:00Z",
+      "zone": "FR",
+      "powerImport": { "ES": 1050.0, "DE": 920.0, "BE": 480.0 },
+      "powerExport": { "GB": 450.0, "IT": 280.0, "CH": 220.0 },
+      "powerNetImport": { "ES": 820.0, "DE": 710.0, "BE": 380.0, "GB": -450.0, "IT": -280.0, "CH": -220.0 }
+    }
+  ]
+}

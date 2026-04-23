@@ -1,0 +1,125 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Lint & format ──────────────────────────────────────────────────────────
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install linting tools
+        run: pip install ruff black
+
+      - name: Run Ruff (lint)
+        run: ruff check .
+
+      - name: Run Black (format check)
+        run: black --check .
+
+  # ── Unit tests ─────────────────────────────────────────────────────────────
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: lint
+
+    env:
+      ELECTRICITY_MAPS_API_KEY: ${{ secrets.ELECTRICITY_MAPS_API_KEY }}
+      DATA_LAKE_ROOT: /tmp/test-data-lake
+      SPARK_MASTER: local[2]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Java 11 (required for PySpark)
+        uses: actions/setup-java@v4
+        with:
+          java-version: "11"
+          distribution: "temurin"
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: pytest tests/ -v --tb=short --junitxml=test-results.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: test-results.xml
+
+  # ── Pipeline dry-run (integration smoke test) ──────────────────────────────
+  integration-smoke:
+    name: Pipeline Smoke Test
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+
+    env:
+      ELECTRICITY_MAPS_API_KEY: ${{ secrets.ELECTRICITY_MAPS_API_KEY }}
+      DATA_LAKE_ROOT: /tmp/smoke-data-lake
+      SPARK_MASTER: local[2]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Java 11
+        uses: actions/setup-java@v4
+        with:
+          java-version: "11"
+          distribution: "temurin"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Bronze layer only (smoke test)
+        run: python pipeline.py --layer bronze --full-load
+
+      - name: Verify Bronze output exists
+        run: |
+          echo "Checking Bronze output …"
+          find /tmp/smoke-data-lake/bronze -name "*.json" | head -20
+          COUNT=$(find /tmp/smoke-data-lake/bronze -name "*.json" | wc -l)
+          echo "Found $COUNT Bronze JSON files"
+          if [ "$COUNT" -eq "0" ]; then
+            echo "ERROR: No Bronze files were created!" && exit 1
+          fi
+
+      - name: Upload smoke-test artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-test-bronze-output
+          path: /tmp/smoke-data-lake/bronze/
